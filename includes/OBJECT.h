@@ -1,17 +1,19 @@
 #include<stdlib.h>
+#include<stdbool.h>
 
-#ifdef __RA_OBJECT_H__
-
+#ifndef __RA_OBJECT_H__
 #define __RA_OBJECT_H__
 
+    #define INVALID_NAME "/<INVALID?NAME>/"
     typedef struct OBJECT OBJECT;
     struct OBJECT{
-        char imgpath[50];
-        int x,y;
+        char* imgpath;
+        float x,y;
+        bool render;
     };
 
-    static OBJECT NULL_OBJ = {.imgpath=NULL,
-                              .x=NULL,
-                              .y=NULL}; 
+    static inline void debug_obj(OBJECT obj){
+        printf("DEBUG OBJ X: %i Y: %i RENDER: %i IMAGEPATH: %s",obj.x,obj.y,obj.render,obj.imgpath);
+    }
 
 #endif
