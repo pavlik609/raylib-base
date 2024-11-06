@@ -5,6 +5,7 @@
 #include<math.h>
 #include <raylib/raylib.h>
 #include <unordered_map>
+#include <random>
 
 #include "includes/OBJECT.hpp"
 #include "includes/linkedlist.hpp"
@@ -43,11 +44,12 @@ void foo(linked_list<int> node, int i){
 unordered_map<char*, Texture2D> textures;
 
 Texture2D GetTexture(char* path){
-    auto exists = textures.find(path);
     Texture2D localTexture;
-    if (memcmp((void*)&localTexture, (void*)&textures.end()->second,sizeof(Texture2D)) == 0){
+    if (textures.find(path) == textures.end()){
         localTexture = LoadTexture(path);
         textures[path] = localTexture;
+    }else{
+        localTexture = textures.find(path)->second;
     }
     return localTexture;
 }
@@ -57,7 +59,10 @@ void DrawParticle(particle particle){
     if (strcmp(particle.imgpath,INVALID_NAME) == 0){
         DrawCircle(particle.x, particle.y, particle.size, particle.color);
     }else{
-        DrawTexture(GetTexture(particle.imgpath),particle.x,particle.y,particle.color);
+        Texture2D tex = GetTexture(particle.imgpath);
+        float tex_width_calc = ((float)tex.width/(float)tex.height)*particle.size;
+        float tex_height_calc = ((float)tex.height/(float)tex.width)*particle.size;
+        DrawTexturePro(tex,(Rectangle){0,0,(float)tex.width,(float)tex.height},(Rectangle){particle.x-tex_width_calc/2+tex.width/2.0f,particle.y-tex_height_calc/2+tex.height/2.0f,tex_width_calc,tex_height_calc},(Vector2){tex.width/2.0f,tex.height/2.0f},0.0f,particle.color);
     }
 }
 
@@ -70,15 +75,23 @@ void UpdateParticle(linked_list<particle>** list,linked_list<particle>* node,int
     (*particle).x += particle->velx;
     (*particle).y -= particle->vely;
     (*particle).size -= particle->sizediff_persec;
-    if (particle->size <= -0.5f){
+    if (particle->size <= 0.0f){
 
         pop_n(list,i);
     }
 }
 
+std::random_device rnd;
+std::mt19937 rng(rnd());
+std::uniform_int_distribution<std::mt19937::result_type> dist(1,100000); //why is this so weird
+ 
+float RandFloat(float max){
+    return (dist(rng)/100000.0f)*max;
+}
+
 int main(){
 //    srand(time(NULL));
-    InitWindow(WIND_W,WIND_H,"Hello Raylib!");
+   InitWindow(WIND_W,WIND_H,"Hello Raylib!");
 
     Vector2 m_pos;
 
@@ -89,8 +102,12 @@ int main(){
     linked_list<particle>* particles = NULL;
     while(!WindowShouldClose()){
         particle_count = 0;
-        if (IsKeyPressed(KEY_W)){
+        if (IsKeyPressed(KEY_K)){
             draw_mode++;
+        }
+        if (IsKeyPressed(KEY_L)){
+            draw_mode--;
+            if (draw_mode < 0) { draw_mode = 0; }
         }
         m_pos = GetMousePosition();
         if (IsMouseButtonDown(0)){
@@ -100,6 +117,12 @@ int main(){
                     break;
                 case 1:        
                     push(&particles,*(new particle((char*)INVALID_NAME,m_pos.x,m_pos.y,true,GRAY,5.0f,0.01f,0.0f,0.0f)));
+                    break;
+                case 2:        
+                    push(&particles,*(new particle((char*)"textures/dev.png",m_pos.x,m_pos.y,true,GRAY,30.0f,0.1f,0.0f,0.0f)));
+                    break;
+                case 3:        
+                    push(&particles,*(new particle((char*)INVALID_NAME,m_pos.x,m_pos.y,true,GRAY,5.0f,0.01f,RandFloat(1)-0.5f,RandFloat(0.5f))));
                     break;
                 default:
                     push(&particles,*(new particle((char*)INVALID_NAME,m_pos.x,m_pos.y,true,GRAY,5.0f,0.01f,0.0f,0.1f)));
