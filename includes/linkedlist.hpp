@@ -8,12 +8,11 @@ struct linked_list {
     T value;
     linked_list* next;
 
-    void pass(linked_list<T>** list,void (*funcptr)(linked_list<T>**,linked_list<T>*,int));
 };
 
 template <typename T>
-void linked_list<T>::pass(linked_list<T>** list,void (*funcptr)(linked_list<T>**,linked_list<T>*,int)){
-    linked_list<T>* curr = this;
+void pass(linked_list<T>** list,void (*funcptr)(linked_list<T>**,linked_list<T>*,int)){
+    linked_list<T>* curr = *list;
     int i = 0;
     while(true){
         if (curr == NULL) { return; }
@@ -36,6 +35,17 @@ void push(linked_list<T>** list,T value){
     *second = **list;
     (**list).value = value;
     (**list).next = second;
+}
+
+template <typename T>
+void passThread(linked_list<T>** list,void (*funcptr)(linked_list<T>**,linked_list<T>*,int,char**),char** update_value){
+    linked_list<T>* curr = *list;
+    int i = 0;
+    while(true){
+        if (curr == NULL) { return; }
+        funcptr(list,curr,i++,update_value);
+        curr = curr->next;
+    }
 }
 
 template <typename T>
