@@ -25,8 +25,75 @@ std::uniform_int_distribution<std::mt19937::result_type> dist(1,100000); //why i
 float RandFloat(float max){ 
     return (dist(rng)/100000.0f)*max;
 }
+struct moving_point : Vector2 {
+    float velx, vely;
+    moving_point(float _x,float _y,float _velx, float _vely) : Vector2({0,0}){
+        x = _x;
+        y = _y;
+        velx = _velx;
+        vely = _vely;
+    }
 
+    bool operator==(moving_point a){
+        if(x == a.x && y == a.y && velx == a.velx && vely == a.vely){
+            return true;
+        }
+        return false;
+    }
+};
 int framecount = 0;
+int boxcount = 0;
+template<typename T>
+void tree_itt_func(quadtree<T> &node){
+    float width = node.width();
+    float height = node.height();
+    float x_calc = node.up_left.x+(float)WIND_W/2-CAM_X;
+    float y_calc = -node.up_left.y+(float)WIND_H/2+CAM_Y;
+            Color part_col;
+            switch(boxcount){
+                case 1:
+                    part_col = GREEN;
+                    break;
+                case 2:
+                    part_col = BLUE;
+                    break;
+                case 3:
+                    part_col = PURPLE;
+                    break;
+                case 4:
+                    part_col = MAGENTA;
+                    break;
+                default:
+                    part_col = BLACK;
+            }
+    if (DEBUG_MODE){
+        DrawRectangleLines(x_calc, y_calc, width, height, part_col);
+    }
+    if ((int)node.values.size() > node.bucket_size){
+        node.split();
+    }
+    if (node.values.empty() == false){
+        for (T& p : node.values){
+            if (node.cond_split){
+                place_if_possible(&node,node.tree_up_left,p);
+                place_if_possible(&node,node.tree_up_right,p);
+                place_if_possible(&node,node.tree_down_left,p);
+                place_if_possible(&node,node.tree_down_right,p); 
+            }
+            p.x += p.velx;
+            particle_count++;
+
+            DrawCircle(p.x-particle_count+(float)WIND_W/2-CAM_X,-p.y+(float)WIND_H/2+CAM_Y,5,part_col);
+        }
+        node.shift = 0;
+        if(node.cond_split){
+            node.values.clear();
+        }
+    }
+    boxcount++;
+    node.cond_split = false;
+}
+
 
 int main(){
 //    srand(time(NULL));
@@ -38,14 +105,15 @@ int main(){
 
     int numbg_lines = 10;
 
-    AABB b1 = AABB((Vector2){-100,100},(Vector2){100,-100});
-    AABB b2 = AABB((Vector2){-150,150},(Vector2){50,-50});
-
-    Vector2 p1 = (Vector2){-99,-99};
-
     int holding = -1;
-
+    quadtree<moving_point> tree = quadtree<moving_point>({-100,100},{100,-100});
+    tree.insert_qtree({50,50,0,0});
+    tree.insert_qtree({-20,70,0,0});
+    tree.insert_qtree({50,-90,0,0});
+    tree.insert_qtree({-50,-80,0.1f,0.1f});
+    tree.insert_qtree({10,10,0,0});
     while(!WindowShouldClose()){
+        boxcount = 0;
         particle_count = 0;
         if (IsKeyDown(KEY_D)){
             CAM_X += 1.0f;
@@ -64,15 +132,6 @@ int main(){
         }if (IsKeyPressed(KEY_L)){
             holding--;
         }
-        if (holding == 0){
-            b2.up_left = m_pos;
-            b2.up_left.x -= (float)WIND_W/2;
-            b2.up_left.y -= (float)WIND_H/2;
-        }else if (holding == 1){
-            b2.down_right = m_pos;
-            b2.down_right.x -= (float)WIND_W/2;
-            b2.down_right.y -= (float)WIND_H/2;
-        }
         BeginDrawing();
             ClearBackground(RAYWHITE);
             
@@ -84,14 +143,7 @@ int main(){
                 DrawLineEx((Vector2){endx,0.0f},(Vector2){endx,WIND_H},2.0f,LIGHTGRAY);
                 DrawLineEx((Vector2){0.0f,endy},(Vector2){WIND_H,endy},2.0f,LIGHTGRAY);
             }
-            cout << " INSIDE : " << b1.inside(p1) << " AABB INTERSECT : " << (b1.intersects(b2) || b2.intersects(b1)) << endl;// ADD 250 to each
-            float width = b1.down_right.x-b1.up_left.x;
-            float height = b1.up_left.y-b1.down_right.y;
-            DrawRectangleLines(b1.up_left.x+(float)WIND_W/2, b1.up_left.y+(float)WIND_H/2-height, width, height, BLACK);
-            float width2 = b2.down_right.x-b2.up_left.x;
-            float height2 = b2.up_left.y-b2.down_right.y;
-            DrawRectangleLines(b2.up_left.x+(float)WIND_W/2, b2.up_left.y+(float)WIND_H/2-height2, width2, height2, BLUE);
-            DrawCircle(p1.x+(float)WIND_W/2,p1.y+(float)WIND_H/2,2,GREEN);        
+            tree.itterate(&(tree_itt_func<moving_point>));
             if(DEBUG_MODE){
                 DrawText("DEBUG MODE",2,2,20,RED);
                 DrawFPS(2,20);
@@ -99,6 +151,7 @@ int main(){
                 DrawText(TextFormat("x : %f | y : %f",CAM_X,CAM_Y),2,60,20,LIGHTGRAY);
                 DrawText(TextFormat("holding : %i",holding),2,80,20,LIGHTGRAY);
             }
+    //cout << inside(*tree.tree_up_right,quadtree_value<Vector2>({50,-50}).data) << endl;
         EndDrawing();
         framecount++;
     }
