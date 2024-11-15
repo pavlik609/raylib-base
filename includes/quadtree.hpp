@@ -61,20 +61,34 @@ template<typename T>
 struct quadtree;
 
 template<typename T>
+struct qtree_value {
+    T data;
+
+    quadtree<T>* parent;
+
+    bool operator==(T a){
+        if(data == a){
+            return true;
+        }
+        return false;
+    }
+};
+
+template<typename T>
 struct quadtree : AABB{
-    vector<T> values;  /*HAS to have an x and y member*/ 
+    vector<qtree_value<T>> values;  /*HAS to have an x and y member*/ 
 
     quadtree<T>* tree_up_left;
     quadtree<T>* tree_up_right;
     quadtree<T>* tree_down_left;
     quadtree<T>* tree_down_right;
 
-    int shift;
-    int min_shift;
+    quadtree<T>* parent;
+
     int bucket_size;
     bool cond_split;
 
-    quadtree<T>(Vector2 _uleft, Vector2 _dright) : AABB({0,0},{0,0}){
+    quadtree<T>(Vector2 _uleft, Vector2 _dright,quadtree<T>* _parent) : AABB({0,0},{0,0}){
         this->up_left = _uleft;
         this->down_right = _dright;
         bucket_size = 4;
@@ -82,19 +96,30 @@ struct quadtree : AABB{
         tree_up_right = NULL;
         tree_down_left = NULL;
         tree_down_right = NULL;
-        shift = 0;
-        min_shift = 99999;
+        parent = _parent;
     }
     void split(void);
     void insert_qtree(T);
     void itterate(void (*fptr)(quadtree<T>&));
+    quadtree<T>* get_deepest_root(void);
 };
+
+template<typename T>
+quadtree<T>* quadtree<T>::get_deepest_root(void){
+    quadtree<T>* retval = this;
+    while(true){
+        if (retval->parent == nullptr){
+            break;
+        }
+        retval = retval->parent;
+    }
+    return retval;
+}
 
 template<typename T>
 void quadtree<T>::insert_qtree(T value){
     int i = this->values.size();
-    this->values.insert(this->values.begin()+i,value);
-    //cout << "IDX (ADD BEGIN IF NOT WORK): " << this->values.size()-1 << endl;
+    this->values.insert(this->values.begin()+i,qtree_value<T>{value,this});
 }
 
 template<typename T>
@@ -118,17 +143,10 @@ bool place_if_possible(quadtree<T>* tree,quadtree<T>* node,T value){
         return false;
     }
     if(inside(*node,value) == false){
-        cout << "test" << endl;
         return false;
     }
-    if (value.velx != 0){
-        cout << value.x << " t" << endl;
-    }
-    //cout << inside(*node,value.data) << " " << value.data.x << " " << value.data.y << endl;
-    int i = node->values.size();
-    node->values.insert((node->values.begin()+i),value);
+    node->values.insert((node->values.begin()+node->values.size()),qtree_value<T>{value,node});
 
-    //tree->values.erase(find(tree->values.begin(),tree->values.end(),value));
     return true;
 }
 
@@ -136,8 +154,8 @@ template<typename T>
 void quadtree<T>::split(void){
     this->cond_split = true;
     Vector2 middle = {this->up_left.x+this->width()/2,this->up_left.y-this->height()/2};
-    this->tree_up_left = new quadtree<T>(this->up_left,middle);
-    this->tree_up_right = new quadtree<T>({middle.x,this->up_left.y},{this->down_right.x,middle.y});
-    this->tree_down_left = new quadtree<T>({this->up_left.x,middle.y},{middle.x,this->down_right.y});
-    this->tree_down_right = new quadtree<T>({middle.x,middle.y},this->down_right);
+    this->tree_up_left = new quadtree<T>(this->up_left,middle,this);
+    this->tree_up_right = new quadtree<T>({middle.x,this->up_left.y},{this->down_right.x,middle.y},this);
+    this->tree_down_left = new quadtree<T>({this->up_left.x,middle.y},{middle.x,this->down_right.y},this);
+    this->tree_down_right = new quadtree<T>({middle.x,middle.y},this->down_right,this);
 }
