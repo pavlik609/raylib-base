@@ -2,6 +2,7 @@
 
 #include "shared.hpp"
 #include <algorithm>
+#include <corecrt_startup.h>
 #include <cstdlib>
 #include <iostream>
 #include <iterator>
@@ -102,7 +103,26 @@ struct quadtree : AABB{
     void insert_qtree(T);
     void itterate(void (*fptr)(quadtree<T>&));
     quadtree<T>* get_deepest_root(void);
+    int tally_branch_values(void);
 };
+
+/* DOES NOT WORK 2 OR MORE LEVELS ABOVE */
+template<typename T>
+int quadtree<T>::tally_branch_values(void){
+    if (this->tree_up_left == nullptr){
+        return 0;
+    }
+    int retval = 0;
+
+    retval += this->tree_up_left->values.size();
+    retval += this->tree_up_right->values.size();
+    retval += this->tree_down_left->values.size();
+    retval += this->tree_down_right->values.size();
+
+    retval += this->values.size();
+
+    return retval;
+}
 
 template<typename T>
 quadtree<T>* quadtree<T>::get_deepest_root(void){

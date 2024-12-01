@@ -48,9 +48,9 @@ int boxcount = 0;
 
 template<typename T>
 void tree_itt_mov(quadtree<T> &node,qtree_value<T>& p){
-    if(node.values.empty() == true){
+    /*if(node.values.empty() == true){
         return;
-    }
+    }*/
 
     if(node.tree_up_left == nullptr){
         return;
@@ -69,6 +69,29 @@ void tree_itt_mov_wrap(quadtree<T> &node){
     }
 }
 
+unsigned char randomify_uchar(int in){
+    int loc_in = in;
+    loc_in ^= (loc_in >> 5);
+    loc_in += (loc_in << 3);
+    loc_in ^= (loc_in >> 4);
+    return (unsigned char) (loc_in);
+}
+
+Color colors_diff[15] = {RED,BLUE,GREEN,
+                        MAGENTA,ORANGE,YELLOW,
+                        MAROON,LIME,SKYBLUE,
+                        PURPLE,BROWN,DARKGREEN,
+                        DARKBLUE,DARKPURPLE,DARKBROWN};
+
+Color get_different_color(int idx){
+    if(idx > 14){
+        int mod = idx % 14;
+        return {(unsigned char)(colors_diff[idx].r-mod),(unsigned char)(colors_diff[idx].r+mod),(unsigned char)(colors_diff[idx].b-mod*1.5f),255};
+    }else{
+        return colors_diff[idx];
+    }
+}
+
 bool overall_change;
 template<typename T>
 void tree_itt_func(quadtree<T> &node){
@@ -76,7 +99,8 @@ void tree_itt_func(quadtree<T> &node){
     float height = node.height();
     float x_calc = node.up_left.x+(float)WIND_W/2-CAM_X;
     float y_calc = -node.up_left.y+(float)WIND_H/2+CAM_Y;
-    Color part_col = {(unsigned char)(boxcount *20 ^ (boxcount << 10)),(unsigned char)((boxcount *30 ^ (boxcount << 5))+(boxcount >> 3)),(unsigned char)((boxcount *50 +(boxcount >> 5))^ (boxcount << 3)),255};
+    Color part_col = get_different_color(boxcount);
+    //{randomify_uchar((boxcount+5)*20),randomify_uchar(boxcount*9),randomify_uchar((boxcount+13)*77),255};
     if (DEBUG_MODE){
         DrawRectangleLines(x_calc, y_calc, width, height, part_col);
     }
@@ -85,26 +109,43 @@ void tree_itt_func(quadtree<T> &node){
     }
     quadtree<T>* deepest_root = node.get_deepest_root();
     vector<qtree_value<T>> insert_after_clear;
+    bool merge = false;
     if (node.values.empty() == false){
         for (qtree_value<T>& p : node.values){
+            p.data.x += p.data.velx;
+            p.data.y += p.data.vely;
             if(node.cond_split || node.tree_up_left != nullptr){
                 tree_itt_mov(node, p);
             }
              // SPLIT THIS INTO TWO PHASES, UPDATING AND MOVING, THEN IF WE DETECT A CHANGE WE ONLY CALL THE MOVE FUNCTION FOR THE SECOND TIME
-            p.data.x += p.data.velx;
             particle_count++;
             DrawCircle(p.data.x+(float)WIND_W/2-CAM_X,-p.data.y+(float)WIND_H/2+CAM_Y,5,part_col);
             if(deepest_root != nullptr){
                 auto found = find(node.values.begin(),node.values.end(),p.data);
-                if (inside(node,p.data) == false){
-                    overall_change = true;
+                bool inside_root = inside(*deepest_root,p.data);
+                int parent_count = (node.parent != nullptr) ? node.parent->tally_branch_values() : node.tally_branch_values();
+                if (inside(node,p.data) == false && inside_root){
+                    //overall_change = true;
+                    if (node.parent != nullptr){
+                        if(inside(*node.parent,p.data)){
+                            parent_count++;
+                        }
+                        if (parent_count < node.parent->bucket_size){
+                            cout << "MERGE NODES" << endl;
+                            merge = true;
+                        }
+                    }
                     if(node.cond_split){
                         insert_after_clear.insert(insert_after_clear.begin()+insert_after_clear.size(),p);
                     }else{
                         deepest_root->values.insert(deepest_root->values.begin()+deepest_root->values.size(),p);
                     }
                     node.values.erase(found);
-                }else if(inside(*deepest_root,p.data) == false){
+                }else if(inside_root == false){
+                    if ((parent_count-1) < node.parent->bucket_size){
+                            cout << "MERGE ES" << endl;
+                            merge = true;
+                    }
                     node.values.erase(found);
                 }
             }
@@ -113,12 +154,36 @@ void tree_itt_func(quadtree<T> &node){
             node.values.clear();
             
             insert_after_clear.clear();
-        }for(qtree_value<T>& ins : insert_after_clear){
+        }
+        for(qtree_value<T>& ins : insert_after_clear){
                 deepest_root->values.insert(deepest_root->values.begin()+deepest_root->values.size(),ins);
+        }
             }
-    }
     boxcount++;
     node.cond_split = false;
+    if(merge == true){
+        quadtree<T>* parent = (node.parent != nullptr) ? node.parent : &node;
+
+        quadtree<T>* uleft = parent->tree_up_left;
+        quadtree<T>* uright = parent->tree_up_right;
+        quadtree<T>* dleft = parent->tree_down_left;
+        quadtree<T>* dright = parent->tree_down_right;
+
+        parent->values.insert(parent->values.end(),uleft->values.begin(),uleft->values.end());
+        parent->values.insert(parent->values.end(),uright->values.begin(),uright->values.end());
+        parent->values.insert(parent->values.end(),dleft->values.begin(),dleft->values.end());
+        parent->values.insert(parent->values.end(),dright->values.begin(),dright->values.end());
+
+        free(uleft);
+        free(uright);
+        free(dleft);
+        free(dright);
+
+        parent->tree_up_left = nullptr;
+        parent->tree_up_right = nullptr;
+        parent->tree_down_left = nullptr;
+        parent->tree_down_right = nullptr;
+    }
 }
 
 
@@ -131,22 +196,21 @@ int main(){
     SetTargetFPS(240);
 
     int numbg_lines = 10;
-
     int holding = -1;
     quadtree<moving_point> tree = quadtree<moving_point>({-100,100},{100,-100},NULL);
     tree.insert_qtree({50,50,0,0});
     tree.insert_qtree({-20,70,0,0});
     tree.insert_qtree({50,-90,0,0});
-    tree.insert_qtree({-50,-80,0.1f,0.1f});
+    tree.insert_qtree({-60,-80,0.03f,0});
     tree.insert_qtree({10,10,0,0});
     while(!WindowShouldClose()){
         boxcount = 0;
         particle_count = 0;
-        overall_change = false;
+        //overall_change = false;
         if(framecount == 10){
-            tree.insert_qtree({20,-10,0,0});
-            tree.insert_qtree({20,-20,0,0});
-            tree.insert_qtree({30,-20,0,0});
+            tree.insert_qtree({20,-50,0,0.010f});
+            tree.insert_qtree({20,-80,0,0.025f});
+            tree.insert_qtree({30,-80,0,0.025f});
         }
         if (IsKeyDown(KEY_D)){
             CAM_X += 1.0f;
@@ -177,15 +241,15 @@ int main(){
                 DrawLineEx((Vector2){0.0f,endy},(Vector2){WIND_H,endy},2.0f,LIGHTGRAY);
             }
             tree.itterate(&(tree_itt_func<moving_point>));
-            if(overall_change){
-                tree.itterate(tree_itt_mov_wrap<moving_point>);
-            }
+            /*if(overall_change){
+                tree.itterate(&(tree_itt_mov_wrap<moving_point>));
+            }*/
             if(DEBUG_MODE){
                 DrawText("DEBUG MODE",2,2,20,RED);
                 DrawFPS(2,20);
-                DrawText(TextFormat("particle_count : %i",particle_count),2,40,20,LIGHTGRAY);
-                DrawText(TextFormat("x : %f | y : %f",CAM_X,CAM_Y),2,60,20,LIGHTGRAY);
-                DrawText(TextFormat("holding : %i",holding),2,80,20,LIGHTGRAY);
+                DrawText(TextFormat("particle_count : %i",particle_count),2,40,20,GRAY);
+                DrawText(TextFormat("x : %f | y : %f",CAM_X,CAM_Y),2,60,20,GRAY);
+                DrawText(TextFormat("holding : %i",holding),2,80,20,GRAY);
             }
     //cout << inside(*tree.tree_up_right,quadtree_value<Vector2>({50,-50}).data) << endl;
         EndDrawing();
